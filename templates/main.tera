@@ -1,0 +1,14 @@
+<!doctype HTML>
+<html>
+  <head>
+    <link rel="stylesheet" href="/static/bulma.min.css"/>
+    <script src="https://unpkg.com/ionicons@4.5.1/dist/ionicons.js"></script>
+  </head>
+  <body>
+    {% block header %}
+      {% include "base_header" %}
+    {% endblock header %}
+    {% block body %}
+    {% endblock body %}
+  </body>
+</html>

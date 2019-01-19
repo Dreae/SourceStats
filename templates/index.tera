@@ -1,0 +1,6 @@
+{% extends "main" %}
+{% block body %}
+  <div class="container is-fluid">
+
+  </div>
+{% endblock body %}
