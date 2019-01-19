@@ -1,0 +1,5 @@
+[book]
+authors = ["Dreae"]
+multilingual = false
+src = "src"
+title = "SourceStats Developer Guide"
