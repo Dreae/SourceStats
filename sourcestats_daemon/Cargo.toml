@@ -9,6 +9,11 @@ build = "build.rs"
 capnp = "0.9.4"
 ring = "0.14.2"
 mio = "0.6.16"
+failure = "0.1.5"
+failure_derive = "0.1.5"
+log = "0.4.6"
+env_logger = "0.6.0"
+slab = "0.4.2"
 
 [build-dependencies]
 capnpc = "0.9.3"
