@@ -27,6 +27,7 @@ fn main() -> Fallible<()> {
     let listen_port = env::var("LISTEN_PORT").expect("$LISTEN_PORT must be defined");
     let addr = format!("{}:{}", listen_addr, listen_port);
 
-    let _listener = event_listener::EventListener::new(&addr)?;
-    Ok(())
+    let mut listener = event_listener::EventListener::new(&addr)?;
+
+    listener.listen()
 }

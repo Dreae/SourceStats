@@ -4,8 +4,7 @@ struct PlayerUpdate {
     steamid64 @0 :UInt64;
     shots @1 :List(ShotFired);
     kills @2 :List(Kill);
-    deaths @3 :List(Kill);
-    game @4 :UInt16;
+    game @3 :UInt16;
 
     struct ShotFired {
         map @0 :Text;
