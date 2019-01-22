@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::rc::Rc;
 use std::io;
 use std::u32;
 
@@ -12,7 +13,7 @@ use crate::event_stream::EventStream;
 pub struct EventListener {
     addr: SocketAddr,
     connections: Slab<EventStream>,
-    event_loop: Poll,
+    event_loop: Rc<Poll>,
 }
 
 impl EventListener {
@@ -20,7 +21,7 @@ impl EventListener {
         Ok(EventListener {
             addr: addr.parse().expect(&format!("Invalid address {}", addr)),
             connections: Slab::new(),
-            event_loop: Poll::new()?,
+            event_loop: Rc::new(Poll::new()?),
         })
     }
 
@@ -41,12 +42,11 @@ impl EventListener {
                         let socket = server.accept();
                         match socket {
                             Ok((stream, _addr)) => {
-                                debug!("Accepted new connection from {}", _addr);
-                                let tok = self.connections.insert(EventStream::new(stream));
-                                match self.event_loop.register(&self.connections[tok].stream, Token(tok), Ready::all(), PollOpt::edge()) {
-                                    Err(e) => error!("Could no register socket with event loop {}", e),
-                                    _ => { }
-                                };
+                                info!("New connection from {}", _addr);
+                                let tok = self.connections.insert(EventStream::new(self.event_loop.clone(), stream));
+
+                                self.connections[tok].token = Token(tok);
+                                self.connections[tok].reregister();
                             },
                             Err(e) => {
                                 error!("TCP Accept error: {}", e);
@@ -55,9 +55,7 @@ impl EventListener {
                     },
                     Token(tok) => {
                         let result = if self.connections.contains(tok) {
-                            let stream = &mut self.connections[tok];
-
-                            EventListener::process_event(stream, &event)
+                            self.process_event(tok, &event)
                         } else {
                             Ok(())
                         };
@@ -69,14 +67,15 @@ impl EventListener {
         }
     }
 
-    fn process_event(stream: &mut EventStream, event: &Event) -> Result<(), io::Error> {
+    fn process_event(&mut self, tok: usize, event: &Event) -> Result<(), io::Error> {
+        let stream = &mut self.connections[tok];
         if event.readiness().contains(Ready::readable()) {
-            trace!("Socket {} is readable", Into::<usize>::into(event.token()));
+            trace!("Socket {:?} is readable", event.token());
             stream.readable()?;
         }
 
         if event.readiness().contains(Ready::writable()) {
-            trace!("Socket {} is writable", Into::<usize>::into(event.token()));
+            trace!("Socket {:?} is writable", event.token());
             stream.writable()?;
         }
 
@@ -91,7 +90,16 @@ impl EventListener {
                 io::ErrorKind::ConnectionAborted |
                 io::ErrorKind::BrokenPipe => {
                     debug!("Got close error, removing {} from pool", token);
-                    self.connections.remove(token);
+                    if self.connections.contains(token) {
+                        let stream = self.connections.remove(token);
+
+                        // Explicitly deregister to be a bit defensive about instances
+                        // where the socket isn't actually closed.
+                        match self.event_loop.deregister(&stream.stream) {
+                            Err(e) => error!("Deregister error {}", e),
+                            _ => { },
+                        };
+                    }
                 }
                 io::ErrorKind::WouldBlock => { },
                 _ => error!("Socket error: {}", err)
