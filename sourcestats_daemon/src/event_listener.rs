@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{SocketAddr, Shutdown};
 use std::rc::Rc;
 use std::io;
 use std::u32;
@@ -46,7 +46,10 @@ impl EventListener {
                                 let tok = self.connections.insert(EventStream::new(self.event_loop.clone(), stream));
 
                                 self.connections[tok].token = Token(tok);
-                                self.connections[tok].reregister();
+                                match self.event_loop.register(&self.connections[tok].stream, Token(tok), self.connections[tok].interest, PollOpt::edge()) {
+                                    Err(e) => error!("Error registering new socket {}: {}", tok, e),
+                                    _ => {},
+                                };
                             },
                             Err(e) => {
                                 error!("TCP Accept error: {}", e);
@@ -95,8 +98,8 @@ impl EventListener {
 
                         // Explicitly deregister to be a bit defensive about instances
                         // where the socket isn't actually closed.
-                        match self.event_loop.deregister(&stream.stream) {
-                            Err(e) => error!("Deregister error {}", e),
+                        match stream.stream.shutdown(Shutdown::Both) {
+                            Err(e) => error!("Shutdown error {}", e),
                             _ => { },
                         };
                     }

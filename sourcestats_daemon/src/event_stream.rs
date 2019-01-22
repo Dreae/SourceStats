@@ -9,7 +9,7 @@ pub struct EventStream {
     pub stream: TcpStream,
     pub token: Token,
     event_loop: Rc<Poll>,
-    interest: Ready,
+    pub interest: Ready,
     read_buf: [u8; 4096],
     rx: BytesMut,
     tx: BytesMut,
@@ -36,7 +36,7 @@ impl EventStream {
         trace!("Read {} bytes", bytes_read);
         if bytes_read == 0 {
             trace!("Got EOF, closing socket {}", Into::<usize>::into(self.token));
-            return Err(Into::<io::Error>::into(ErrorKind::ConnectionReset));
+            return Err(ErrorKind::ConnectionReset.into());
         }
 
         self.rx.extend_from_slice(&self.read_buf[..bytes_read]);
