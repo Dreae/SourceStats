@@ -9,19 +9,22 @@ use mio::net::TcpListener;
 use slab::Slab;
 
 use crate::event_stream::EventStream;
+use crate::db_worker_pool::DbWorkerService;
 
 pub struct EventListener {
     addr: SocketAddr,
     connections: Slab<EventStream>,
     event_loop: Rc<Poll>,
+    work_pool: DbWorkerService,
 }
 
 impl EventListener {
-    pub fn new(addr: &str) -> Fallible<EventListener> {
+    pub fn new(addr: &str, work_pool: DbWorkerService) -> Fallible<EventListener> {
         Ok(EventListener {
             addr: addr.parse().expect(&format!("Invalid address {}", addr)),
             connections: Slab::new(),
             event_loop: Rc::new(Poll::new()?),
+            work_pool,
         })
     }
 
@@ -43,7 +46,7 @@ impl EventListener {
                         match socket {
                             Ok((stream, _addr)) => {
                                 info!("New connection from {}", _addr);
-                                let tok = self.connections.insert(EventStream::new(self.event_loop.clone(), stream));
+                                let tok = self.connections.insert(EventStream::new(self.event_loop.clone(), stream, self.work_pool.clone()));
 
                                 self.connections[tok].token = Token(tok);
                                 match self.event_loop.register(&self.connections[tok].stream, Token(tok), self.connections[tok].interest, PollOpt::edge()) {

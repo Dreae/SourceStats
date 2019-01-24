@@ -1,8 +1,12 @@
 use mio::net::TcpStream;
 use bytes::BytesMut;
+use mio::{Poll, Ready, PollOpt, Token};
+use byteorder::{ByteOrder, NetworkEndian};
+use crate::packet::Packet;
+use crate::db_worker_pool::DbWorkerService;
+
 use std::io::{Write, Read, ErrorKind};
 use std::rc::Rc;
-use mio::{Poll, Ready, PollOpt, Token};
 use std::io;
 
 pub struct EventStream {
@@ -13,10 +17,11 @@ pub struct EventStream {
     read_buf: [u8; 4096],
     rx: BytesMut,
     tx: BytesMut,
+    work_pool: DbWorkerService,
 }
 
 impl EventStream {
-    pub fn new(event_loop: Rc<Poll>, stream: TcpStream) -> EventStream {
+    pub fn new(event_loop: Rc<Poll>, stream: TcpStream, work_pool: DbWorkerService) -> EventStream {
         let mut interest = Ready::all();
         interest.remove(Ready::writable());
 
@@ -28,6 +33,7 @@ impl EventStream {
             read_buf: [0u8; 4096],
             rx: BytesMut::with_capacity(4096),
             tx: BytesMut::with_capacity(4096),
+            work_pool,
         }
     }
 
@@ -41,8 +47,21 @@ impl EventStream {
 
         self.rx.extend_from_slice(&self.read_buf[..bytes_read]);
 
-        let buf = self.rx.take();
-        self.write(&buf[..]);
+        while self.rx.len() > 2 {
+            let msg_len = NetworkEndian::read_u16(&self.rx) as usize;
+            trace!("Expecting message of size {} current bytes read {}", msg_len, self.rx.len());
+            if msg_len < 24 {
+                error!("{:?}: Message length is too short to be a well-formed message", self.token);
+                warn!("{:?}: Clearing corrupted buffer from {:?}", self.token, self.stream.peer_addr());
+                self.rx.clear();
+
+            } else if self.rx.len() - 2 >= msg_len {
+                trace!("Submitting new packet to workpool");
+                self.work_pool.submit(Packet::from_buf(self.token, self.rx.split_to(msg_len)));
+            } else {
+                break;
+            }
+        }
 
         Ok(())
     }
