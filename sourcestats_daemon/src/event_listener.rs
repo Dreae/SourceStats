@@ -1,4 +1,5 @@
 use std::net::{SocketAddr, Shutdown};
+use std::borrow::Borrow;
 use std::rc::Rc;
 use std::io;
 use std::u32;
@@ -10,12 +11,13 @@ use slab::Slab;
 
 use crate::event_stream::EventStream;
 use crate::db_worker_pool::DbWorkerService;
+use crate::packet::Packet;
 
 pub struct EventListener {
     addr: SocketAddr,
     connections: Slab<EventStream>,
     event_loop: Rc<Poll>,
-    work_pool: DbWorkerService,
+    work_pool: Rc<DbWorkerService>,
 }
 
 impl EventListener {
@@ -24,14 +26,16 @@ impl EventListener {
             addr: addr.parse().expect(&format!("Invalid address {}", addr)),
             connections: Slab::new(),
             event_loop: Rc::new(Poll::new()?),
-            work_pool,
+            work_pool: Rc::new(work_pool),
         })
     }
 
     pub fn listen(&mut self) -> Fallible<()> {
         const SERVER: Token = Token((u32::MAX - 1) as usize);
+        const WORK_POOL: Token = Token((u32::MAX - 2) as usize);
         let server = TcpListener::bind(&self.addr)?;
         self.event_loop.register(&server, SERVER, Ready::readable(), PollOpt::edge())?;
+        self.event_loop.register::<DbWorkerService>(self.work_pool.borrow(), WORK_POOL, Ready::readable(), PollOpt::edge())?;
 
         let mut events = Events::with_capacity(1024);
 
@@ -57,6 +61,12 @@ impl EventListener {
                             Err(e) => {
                                 error!("TCP Accept error: {}", e);
                             }
+                        }
+                    },
+                    WORK_POOL => {
+                        trace!("DB workers have pending replies");
+                        while let Ok(packet) = self.work_pool.get_reply() {
+                            self.send_reply(packet);
                         }
                     },
                     Token(tok) => {
@@ -102,7 +112,7 @@ impl EventListener {
                         // Explicitly deregister to be a bit defensive about instances
                         // where the socket isn't actually closed.
                         match stream.stream.shutdown(Shutdown::Both) {
-                            Err(e) => error!("Shutdown error {}", e),
+                            Err(e) => warn!("Shutdown error {}", e),
                             _ => { },
                         };
                     }
@@ -111,5 +121,13 @@ impl EventListener {
                 _ => error!("Socket error: {}", err)
             };
         };
+    }
+
+    fn send_reply(&mut self, packet: Packet) {
+        let tok = packet.token;
+        if self.connections.contains(tok.into()) {
+            let stream = &mut self.connections[tok.into()];
+            stream.write(packet.serialize());
+        }
     }
 }

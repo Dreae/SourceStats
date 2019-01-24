@@ -17,11 +17,11 @@ pub struct EventStream {
     read_buf: [u8; 4096],
     rx: BytesMut,
     tx: BytesMut,
-    work_pool: DbWorkerService,
+    work_pool: Rc<DbWorkerService>,
 }
 
 impl EventStream {
-    pub fn new(event_loop: Rc<Poll>, stream: TcpStream, work_pool: DbWorkerService) -> EventStream {
+    pub fn new(event_loop: Rc<Poll>, stream: TcpStream, work_pool: Rc<DbWorkerService>) -> EventStream {
         let mut interest = Ready::all();
         interest.remove(Ready::writable());
 
@@ -38,14 +38,26 @@ impl EventStream {
     }
 
     pub fn readable(&mut self) -> Result<(), io::Error> {
-        let bytes_read = self.stream.read(&mut self.read_buf)?;
-        trace!("Read {} bytes", bytes_read);
-        if bytes_read == 0 {
-            trace!("Got EOF, closing socket {}", Into::<usize>::into(self.token));
-            return Err(ErrorKind::ConnectionReset.into());
-        }
+        loop {
+            match self.stream.read(&mut self.read_buf) {
+                Ok(bytes_read) => {
+                    trace!("Read {} bytes", bytes_read);
+                    if bytes_read == 0 {
+                        trace!("Got EOF, closing socket {}", Into::<usize>::into(self.token));
+                        return Err(ErrorKind::ConnectionReset.into());
+                    }
 
-        self.rx.extend_from_slice(&self.read_buf[..bytes_read]);
+                    self.rx.extend_from_slice(&self.read_buf[..bytes_read]);
+                },
+                Err(e) => {
+                    if e.kind() != ErrorKind::WouldBlock {
+                        return Err(e);
+                    }
+
+                    break;
+                },
+            };
+        }
 
         while self.rx.len() > 2 {
             let msg_len = NetworkEndian::read_u16(&self.rx) as usize;
@@ -54,7 +66,6 @@ impl EventStream {
                 error!("{:?}: Message length is too short to be a well-formed message", self.token);
                 warn!("{:?}: Clearing corrupted buffer from {:?}", self.token, self.stream.peer_addr());
                 self.rx.clear();
-
             } else if self.rx.len() - 2 >= msg_len {
                 trace!("Submitting new packet to workpool");
                 self.work_pool.submit(Packet::from_buf(self.token, self.rx.split_to(msg_len)));
@@ -91,8 +102,8 @@ impl EventStream {
         };
     }
 
-    pub fn write(&mut self, buf: &[u8]) {
-        self.tx.extend_from_slice(buf);
+    pub fn write(&mut self, buf: BytesMut) {
+        self.tx.unsplit(buf);
         self.interest.insert(Ready::writable());
         self.reregister();
     }

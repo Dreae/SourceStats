@@ -1,11 +1,11 @@
-extern crate capnp;
 extern crate mio;
-extern crate ring;
 extern crate failure;
 extern crate failure_derive;
 extern crate slab;
 extern crate byteorder;
 extern crate crossbeam_channel;
+extern crate sourcestats_protocol;
+extern crate num_cpus;
 
 #[macro_use]
 extern crate log;
@@ -22,17 +22,13 @@ mod db_worker_pool;
 
 use db_worker_pool::DbWorkerService;
 
-pub mod protocol_capnp {
-    include!("../../capnp/protocol_capnp.rs");
-}
-
 fn main() -> Fallible<()> {
     env_logger::init();
 
     let listen_addr = env::var("LISTEN_ADDR").expect("$LISTEN_ADDR must be defined");
     let listen_port = env::var("LISTEN_PORT").expect("$LISTEN_PORT must be defined");
     let addr = format!("{}:{}", listen_addr, listen_port);
-    let work_pool = DbWorkerService::new(8);
+    let work_pool = DbWorkerService::new(num_cpus::get() * 2);
 
     let mut listener = event_listener::EventListener::new(&addr, work_pool)?;
 
