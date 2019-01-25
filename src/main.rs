@@ -2,6 +2,7 @@
 
 #[macro_use] extern crate rocket;
 extern crate rocket_contrib;
+extern crate sourcestats_database;
 
 use rocket_contrib::serve::StaticFiles;
 use rocket_contrib::templates::Template;

@@ -1,0 +1,13 @@
+[package]
+name = "sourcestats_database"
+version = "0.1.0"
+authors = ["Dreae <dreae@dreae.onl>"]
+edition = "2018"
+
+[dependencies]
+r2d2 = "0.8.3"
+r2d2-diesel = "1.0.0"
+
+[dependencies.diesel]
+version =  "1.4.0"
+features = ["postgres"]

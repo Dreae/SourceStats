@@ -1,50 +1,47 @@
-use crossbeam_channel::{self as mpmc, Sender, Receiver};
 use crate::packet::Packet;
 use mio::{Ready, Registration, Poll, PollOpt, Token, Evented, SetReadiness};
+use rayon::{ThreadPoolBuilder, ThreadPool};
 
-use std::sync::mpsc::{self, Sender as MPSCSender, Receiver as MPSCReceiver, TryRecvError};
-use std::thread::Builder;
+use std::sync::mpsc::{self, Sender, Receiver, TryRecvError};
 use std::sync::Arc;
 use std::io;
 
 pub struct DbWorkerService {
-    packet_sender: Sender<Packet>,
-    reply_receiver: MPSCReceiver<Packet>,
+    reply_sender: Sender<Packet>,
+    reply_receiver: Receiver<Packet>,
     registration: Arc<Registration>,
     set_readiness: Arc<SetReadiness>,
-}
-
-struct DbWorker {
-    id: usize,
-    packet_receiver: Receiver<Packet>,
-    reply_sender: MPSCSender<Packet>,
-    set_readiness: SetReadiness,
+    thread_pool: ThreadPool,
 }
 
 impl DbWorkerService {
     pub fn new(threads: usize) -> DbWorkerService {
-        let (send, recv) = mpmc::unbounded();
         let (reply_send, reply_recv) = mpsc::channel();
         let (registration, set_readiness) = Registration::new2();
-
-        for id in 0..threads {
-            DbWorker::new(id, recv.clone(), reply_send.clone(), set_readiness.clone());
-
-        }
+        let thread_pool = ThreadPoolBuilder::new().num_threads(threads).thread_name(|id| {
+            format!("DbWorker-{}", id)
+        }).panic_handler(|err| error!("Worker pool panic! {:?}", err))
+            .build().expect("Error building DbWorker thread pool");
 
         DbWorkerService {
-            packet_sender: send,
+            reply_sender: reply_send,
             reply_receiver: reply_recv,
             registration: Arc::new(registration),
             set_readiness: Arc::new(set_readiness),
+            thread_pool,
         }
     }
 
     pub fn submit(&self, packet: Packet) {
-        match self.packet_sender.send(packet) {
-            Err(_) => error!("Error submitting packet, pool is shutdown"),
-            _ => { }
-        };
+        let sender = self.reply_sender.clone();
+        let set_readiness = self.set_readiness.clone();
+        self.thread_pool.spawn(move || {
+            sender.send(packet).expect("Work pool shutdown"); // Echo the packet back
+            match set_readiness.set_readiness(Ready::readable()) { // Notify the worker pool there's something to read
+                Err(e) => error!("Error notifying thread pool of reply: {}", e),
+                _ => { }
+            };
+        })
     }
 
     pub fn get_reply(&self) -> Result<Packet, io::Error> {
@@ -73,31 +70,5 @@ impl Evented for DbWorkerService {
 
     fn deregister(&self, poll: &Poll) -> io::Result<()> {
         self.registration.deregister(poll)
-    }
-}
-
-impl DbWorker {
-    pub fn new(id: usize, receiver: Receiver<Packet>, reply_sender: MPSCSender<Packet>, set_readiness: SetReadiness) {
-        let worker = DbWorker {
-            id,
-            packet_receiver: receiver,
-            reply_sender,
-            set_readiness,
-        };
-
-        worker.start();
-    }
-
-    fn start(self) {
-        Builder::new().name(format!("DbPoolThread-{}", self.id)).spawn(move || {
-            for packet in self.packet_receiver.iter() {
-                trace!("DbPoolThread-{} received new packet", self.id);
-                self.reply_sender.send(packet).expect("Work pool shutdown"); // Echo the packet back
-                match self.set_readiness.set_readiness(Ready::readable()) { // Notify the worker pool there's something to read
-                    Err(e) => error!("Error notifying thread pool of reply: {}", e),
-                    _ => { }
-                };
-            }
-        }).unwrap();
     }
 }

@@ -13,6 +13,9 @@ env_logger = "0.6.0"
 slab = "0.4.2"
 bytes = "0.4.11"
 byteorder = "1.3.1"
-crossbeam-channel = "0.3.6"
-sourcestats_protocol = { path = "../sourcestats_protocol" }
 num_cpus = "1.9.0"
+rayon = "1.0.3"
+dotenv = "0.13.0"
+
+sourcestats_protocol = { path = "../sourcestats_protocol" }
+sourcestats_database = { path = "../sourcestats_database" }

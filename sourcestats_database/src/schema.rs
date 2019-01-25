@@ -1,0 +1,41 @@
+table! {
+    accounts (user_id) {
+        user_id -> Int4,
+        email -> Text,
+        username -> Varchar,
+        password -> Bpchar,
+    }
+}
+
+table! {
+    players (player_id) {
+        player_id -> Int4,
+        steam_id -> Numeric,
+    }
+}
+
+table! {
+    server_keys (key_id) {
+        key_id -> Int8,
+        key_data -> Bytea,
+        server_id -> Int4,
+    }
+}
+
+table! {
+    servers (server_id) {
+        server_id -> Int4,
+        server_name -> Text,
+        server_address -> Bpchar,
+        server_website -> Nullable<Text>,
+    }
+}
+
+joinable!(server_keys -> servers (server_id));
+
+allow_tables_to_appear_in_same_query!(
+    accounts,
+    players,
+    server_keys,
+    servers,
+);

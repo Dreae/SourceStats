@@ -4,7 +4,6 @@ struct PlayerUpdate {
     steamId64 @0 :UInt64;
     shots @1 :List(ShotFired);
     kills @2 :List(Kill);
-    game @3 :UInt16;
     serverId @4 :UInt64;
 
     struct ShotFired {

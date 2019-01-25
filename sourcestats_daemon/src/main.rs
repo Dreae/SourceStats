@@ -3,9 +3,10 @@ extern crate failure;
 extern crate failure_derive;
 extern crate slab;
 extern crate byteorder;
-extern crate crossbeam_channel;
 extern crate sourcestats_protocol;
 extern crate num_cpus;
+extern crate rayon;
+extern crate dotenv;
 
 #[macro_use]
 extern crate log;
@@ -23,6 +24,7 @@ mod db_worker_pool;
 use db_worker_pool::DbWorkerService;
 
 fn main() -> Fallible<()> {
+    dotenv::dotenv().ok();
     env_logger::init();
 
     let listen_addr = env::var("LISTEN_ADDR").expect("$LISTEN_ADDR must be defined");
