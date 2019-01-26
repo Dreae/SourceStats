@@ -10,3 +10,4 @@ pub mod models;
 
 pub use pool::Pool;
 pub use models::*;
+pub use diesel::result::{Error as SQLError};

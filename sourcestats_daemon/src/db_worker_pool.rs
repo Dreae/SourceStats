@@ -1,8 +1,8 @@
 use crate::packet::Packet;
 use mio::{Ready, Registration, Poll, PollOpt, Token, Evented, SetReadiness};
 use rayon::{ThreadPoolBuilder, ThreadPool};
-use sourcestats_database::{Pool, ServerKey};
-use sourcestats_protocol::Message;
+use sourcestats_database::{Pool, ServerKey, SQLError};
+use sourcestats_protocol::{Message, DecryptError};
 
 use std::sync::mpsc::{self, Sender, Receiver, TryRecvError};
 use std::sync::Arc;
@@ -16,6 +16,26 @@ pub struct DbWorkerService {
     thread_pool: ThreadPool,
     pool: Pool,
 }
+
+#[derive(Debug)]
+enum ProcessingError {
+    SqlError(SQLError),
+    ParseError(DecryptError),
+}
+
+impl From<SQLError> for ProcessingError {
+    fn from(err: SQLError) -> Self {
+        ProcessingError::SqlError(err)
+    }
+}
+
+impl From<DecryptError> for ProcessingError {
+    fn from(err: DecryptError) -> Self {
+        ProcessingError::ParseError(err)
+    }
+}
+
+type ProcessingResult = Result<(), ProcessingError>;
 
 impl DbWorkerService {
     pub fn new(threads: usize, pool: Pool) -> DbWorkerService {
@@ -37,16 +57,13 @@ impl DbWorkerService {
     }
 
     pub fn submit(&self, packet: Packet) {
-        let connection = self.pool.clone().get_connection();
+        let pool = self.pool.clone();
         // TODO: Error handling
         self.thread_pool.spawn(move || {
-            match ServerKey::get_by_id(packet.key_id, &connection) {
-                Ok(key) => {
-                    let _message = Message::decrypt(&key.key_data, packet.nonce, packet.data);
-                },
-                Err(e) => error!("Error getting server details {}", e),
-            };
-        })
+            if let Err(e) = DbWorkerService::parse_packet(packet, pool) {
+                error!("Error processing message {:?}", e)
+            }
+        });
     }
 
     pub fn get_reply(&self) -> Result<Packet, io::Error> {
@@ -61,6 +78,20 @@ impl DbWorkerService {
             },
             Err(TryRecvError::Disconnected) => Err(io::ErrorKind::Other.into()),
         }
+    }
+
+    fn parse_packet(packet: Packet, pool: Pool) -> ProcessingResult {
+        let connection = pool.get_connection();
+        let key =  ServerKey::get_by_id(packet.key_id, &connection)?;
+        let message = Message::decrypt(&key.key_data, packet.nonce, packet.data)?;
+        match message {
+            Message::PlayerUpdate(update) => {
+
+            }
+        };
+
+
+        Ok(())
     }
 }
 

@@ -1,12 +1,16 @@
-use capnp::message::{ReaderOptions, TypedReader};
-use capnp::serialize::OwnedSegments;
+use capnp::message::ReaderOptions;
 use capnp::serialize_packed;
 use capnp::Error as CapnpError;
 use bytes::{BytesMut, IntoBuf};
-use ring::aead::{self, OpeningKey, Nonce, CHACHA20_POLY1305, Aad};
+use ring::aead::{self, OpeningKey, Nonce, CHACHA20_POLY1305, Aad, SealingKey};
 use ring::error::Unspecified;
+use ring::rand::{SecureRandom, SystemRandom};
 use byteorder::{ByteOrder, NetworkEndian};
-use crate::protocol_capnp::player_update;
+use crate::{PlayerUpdate, CapnpSerialize};
+
+thread_local! {
+    pub static CSPRNG: SystemRandom = SystemRandom::new();
+}
 
 #[derive(PartialEq, PartialOrd)]
 pub enum MessageType {
@@ -14,9 +18,8 @@ pub enum MessageType {
     PlayerUpdate = 1,
 }
 
-// TODO: Create new structs
 pub enum Message {
-    PlayerUpdate(TypedReader<OwnedSegments, player_update::Owned>),
+    PlayerUpdate(PlayerUpdate),
 }
 
 #[derive(Debug)]
@@ -63,9 +66,36 @@ impl Message {
         match message_id {
             MessageType::PlayerUpdate => {
                 let reader = serialize_packed::read_message(&mut buf.into_buf(), ReaderOptions::default())?;
-                Ok(Message::PlayerUpdate(TypedReader::new(reader)))
+                Ok(Message::PlayerUpdate(PlayerUpdate::from_capnp(reader)?))
             },
             _ => unreachable!()
         }
+    }
+
+    pub fn encrypt(key: &[u8], message: Message) -> Result<([u8; 12], BytesMut), DecryptError> {
+        let key = SealingKey::new(&CHACHA20_POLY1305, key)?;
+
+        let mut nonce_buf = [0u8; 12];
+        CSPRNG.with(|csprng| {
+            csprng.fill(&mut nonce_buf)
+        })?;
+
+        let nonce = Nonce::assume_unique_for_key(nonce_buf);
+
+        let mut buf = match message {
+            Message::PlayerUpdate(update) => update.serialize()?
+        };
+
+        buf.reserve(key.algorithm().tag_len());
+        unsafe {
+            buf.set_len(buf.len() + key.algorithm().tag_len())
+        }
+
+        let out_len = aead::seal_in_place(&key, nonce, Aad::empty(), &mut buf, key.algorithm().tag_len())?;
+        unsafe {
+            buf.set_len(out_len);
+        }
+
+        Ok((nonce_buf, buf))
     }
 }
