@@ -1,0 +1,1 @@
+DROP INDEX idx_player_steam_id;

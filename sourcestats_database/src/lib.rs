@@ -2,7 +2,11 @@
 extern crate diesel;
 extern crate r2d2;
 extern crate r2d2_diesel;
+extern crate chrono;
 
-mod schema;
-mod pool;
-mod models;
+pub mod schema;
+pub mod pool;
+pub mod models;
+
+pub use pool::Pool;
+pub use models::*;

@@ -7,10 +7,10 @@ pub struct Pool {
 }
 
 impl Pool {
-    pub fn new(max_connections: u32, url: &str) -> Result<Pool, r2d2::Error> {
+    pub fn new(max_connections: usize, url: &str) -> Result<Pool, r2d2::Error> {
         let manager = ConnectionManager::new(url);
         Ok(Pool {
-            pool: r2d2Pool::builder().max_size(max_connections).build(manager)?
+            pool: r2d2Pool::builder().max_size(max_connections as u32).build(manager)?
         })
     }
 

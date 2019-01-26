@@ -1,6 +1,8 @@
 use crate::packet::Packet;
 use mio::{Ready, Registration, Poll, PollOpt, Token, Evented, SetReadiness};
 use rayon::{ThreadPoolBuilder, ThreadPool};
+use sourcestats_database::{Pool, ServerKey};
+use sourcestats_protocol::Message;
 
 use std::sync::mpsc::{self, Sender, Receiver, TryRecvError};
 use std::sync::Arc;
@@ -12,10 +14,11 @@ pub struct DbWorkerService {
     registration: Arc<Registration>,
     set_readiness: Arc<SetReadiness>,
     thread_pool: ThreadPool,
+    pool: Pool,
 }
 
 impl DbWorkerService {
-    pub fn new(threads: usize) -> DbWorkerService {
+    pub fn new(threads: usize, pool: Pool) -> DbWorkerService {
         let (reply_send, reply_recv) = mpsc::channel();
         let (registration, set_readiness) = Registration::new2();
         let thread_pool = ThreadPoolBuilder::new().num_threads(threads).thread_name(|id| {
@@ -29,17 +32,19 @@ impl DbWorkerService {
             registration: Arc::new(registration),
             set_readiness: Arc::new(set_readiness),
             thread_pool,
+            pool,
         }
     }
 
     pub fn submit(&self, packet: Packet) {
-        let sender = self.reply_sender.clone();
-        let set_readiness = self.set_readiness.clone();
+        let connection = self.pool.clone().get_connection();
+        // TODO: Error handling
         self.thread_pool.spawn(move || {
-            sender.send(packet).expect("Work pool shutdown"); // Echo the packet back
-            match set_readiness.set_readiness(Ready::readable()) { // Notify the worker pool there's something to read
-                Err(e) => error!("Error notifying thread pool of reply: {}", e),
-                _ => { }
+            match ServerKey::get_by_id(packet.key_id, &connection) {
+                Ok(key) => {
+                    let _message = Message::decrypt(&key.key_data, packet.nonce, packet.data);
+                },
+                Err(e) => error!("Error getting server details {}", e),
             };
         })
     }

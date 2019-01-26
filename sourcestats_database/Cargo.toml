@@ -7,7 +7,8 @@ edition = "2018"
 [dependencies]
 r2d2 = "0.8.3"
 r2d2-diesel = "1.0.0"
+chrono = "0.4.6"
 
 [dependencies.diesel]
 version =  "1.4.0"
-features = ["postgres"]
+features = ["postgres", "chrono"]

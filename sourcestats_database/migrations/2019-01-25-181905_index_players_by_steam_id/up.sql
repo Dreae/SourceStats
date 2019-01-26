@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX idx_player_steam_id ON players(steam_id);

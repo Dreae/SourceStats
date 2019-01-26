@@ -1,12 +1,12 @@
-use capnp::message::{ReaderOptions, Builder, Reader};
+use capnp::message::{ReaderOptions, TypedReader};
 use capnp::serialize::OwnedSegments;
 use capnp::serialize_packed;
 use capnp::Error as CapnpError;
 use bytes::{BytesMut, IntoBuf};
-use crate::protocol_capnp::player_update;
 use ring::aead::{self, OpeningKey, Nonce, CHACHA20_POLY1305, Aad};
 use ring::error::Unspecified;
 use byteorder::{ByteOrder, NetworkEndian};
+use crate::protocol_capnp::player_update;
 
 #[derive(PartialEq, PartialOrd)]
 pub enum MessageType {
@@ -14,10 +14,12 @@ pub enum MessageType {
     PlayerUpdate = 1,
 }
 
+// TODO: Create new structs
 pub enum Message {
-    PlayerUpdate(Reader<OwnedSegments>),
+    PlayerUpdate(TypedReader<OwnedSegments, player_update::Owned>),
 }
 
+#[derive(Debug)]
 pub enum DecryptError {
     CryptographyError,
     InvalidMessage,
@@ -61,7 +63,7 @@ impl Message {
         match message_id {
             MessageType::PlayerUpdate => {
                 let reader = serialize_packed::read_message(&mut buf.into_buf(), ReaderOptions::default())?;
-                Ok(Message::PlayerUpdate(reader))
+                Ok(Message::PlayerUpdate(TypedReader::new(reader)))
             },
             _ => unreachable!()
         }
