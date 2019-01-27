@@ -3,3 +3,6 @@
 
 [print_schema]
 file = "src/schema.rs"
+
+[print_schema.filter]
+except_tables = ["kills", "rank_history"]

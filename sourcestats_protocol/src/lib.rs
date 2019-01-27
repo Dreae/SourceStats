@@ -2,6 +2,8 @@ extern crate capnp;
 extern crate ring;
 extern crate bytes;
 extern crate byteorder;
+#[macro_use]
+extern crate log;
 
 pub mod message;
 pub mod player_update;

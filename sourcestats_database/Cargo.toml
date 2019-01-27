@@ -8,6 +8,7 @@ edition = "2018"
 r2d2 = "0.8.3"
 r2d2-diesel = "1.0.0"
 chrono = "0.4.6"
+log = "0.4.6"
 
 [dependencies.diesel]
 version =  "1.4.0"

@@ -8,6 +8,7 @@ pub struct Pool {
 
 impl Pool {
     pub fn new(max_connections: usize, url: &str) -> Result<Pool, r2d2::Error> {
+        trace!("Building pool of {} connections to {}", max_connections, url);
         let manager = ConnectionManager::new(url);
         Ok(Pool {
             pool: r2d2Pool::builder().max_size(max_connections as u32).build(manager)?
@@ -15,6 +16,7 @@ impl Pool {
     }
 
     pub fn get_connection(&self) -> PooledConnection<ConnectionManager<PgConnection>> {
+        trace!("Getting a connection from the database pool");
         self.pool.get().expect("Failed to get a connection from the DB pool")
     }
 }

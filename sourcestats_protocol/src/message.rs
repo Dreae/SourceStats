@@ -58,9 +58,6 @@ impl Message {
         let mut buf = data.split_to(plaintext_len);
 
         let message_id: MessageType = NetworkEndian::read_i32(&buf).into();
-        if message_id == MessageType::UNKNOWN {
-            return Err(DecryptError::InvalidMessage);
-        }
         buf.advance(4);
 
         match message_id {
@@ -68,7 +65,7 @@ impl Message {
                 let reader = serialize_packed::read_message(&mut buf.into_buf(), ReaderOptions::default())?;
                 Ok(Message::PlayerUpdate(PlayerUpdate::from_capnp(reader)?))
             },
-            _ => unreachable!()
+            _ => Err(DecryptError::InvalidMessage)
         }
     }
 

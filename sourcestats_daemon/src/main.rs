@@ -8,6 +8,7 @@ extern crate sourcestats_database;
 extern crate num_cpus;
 extern crate rayon;
 extern crate dotenv;
+extern crate chrono;
 
 #[macro_use]
 extern crate log;
