@@ -2,7 +2,7 @@ use capnp::message::ReaderOptions;
 use capnp::serialize_packed;
 use capnp::Error as CapnpError;
 use bytes::{BytesMut, IntoBuf};
-use ring::aead::{self, OpeningKey, Nonce, CHACHA20_POLY1305, Aad, SealingKey};
+use ring::aead::{self, OpeningKey, CHACHA20_POLY1305, SealingKey};
 use ring::error::Unspecified;
 use ring::rand::{SecureRandom, SystemRandom};
 use byteorder::{ByteOrder, NetworkEndian};
@@ -53,8 +53,7 @@ impl From<i32> for MessageType {
 impl Message {
     pub fn decrypt(key: &[u8], nonce: BytesMut, mut data: BytesMut) -> Result<Message, DecryptError> {
         let key = OpeningKey::new(&CHACHA20_POLY1305, key)?;
-        let nonce = Nonce::try_assume_unique_for_key(&nonce[..12])?;
-        let plaintext_len = aead::open_in_place(&key, nonce, Aad::empty(), 0, &mut data)?.len();
+        let plaintext_len = aead::open_in_place(&key, &nonce[..12], &[], 0, &mut data)?.len();
         let mut buf = data.split_to(plaintext_len);
 
         let message_id: MessageType = NetworkEndian::read_i32(&buf).into();
@@ -77,8 +76,6 @@ impl Message {
             csprng.fill(&mut nonce_buf)
         })?;
 
-        let nonce = Nonce::assume_unique_for_key(nonce_buf);
-
         let mut buf = match message {
             Message::PlayerUpdate(update) => update.serialize()?
         };
@@ -88,7 +85,7 @@ impl Message {
             buf.set_len(buf.len() + key.algorithm().tag_len())
         }
 
-        let out_len = aead::seal_in_place(&key, nonce, Aad::empty(), &mut buf, key.algorithm().tag_len())?;
+        let out_len = aead::seal_in_place(&key, &nonce_buf, &[], &mut buf, key.algorithm().tag_len())?;
         unsafe {
             buf.set_len(out_len);
         }

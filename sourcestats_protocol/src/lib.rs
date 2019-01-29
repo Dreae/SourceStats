@@ -9,7 +9,7 @@ pub mod message;
 pub mod player_update;
 
 pub mod protocol_capnp {
-    include!("../../capnp/protocol_capnp.rs");
+    include!(concat!(env!("OUT_DIR"), "/../capnp/protocol_capnp.rs"));
 }
 
 pub use message::*;

@@ -1,10 +1,7 @@
-[package]
-name = "sourcestats"
-version = "0.1.0"
-authors = ["Dreae <dreae@dreae.onl>"]
-edition = "2018"
-
-[dependencies]
-rocket = "0.4.0"
-rocket_contrib = "0.4.0"
-sourcestats_database = { path = "./sourcestats_database" }
+[workspace]
+members = [
+    "sourcestats_daemon",
+    "sourcestats_database",
+    "sourcestats_protocol",
+    "sourcestats_web",
+]
