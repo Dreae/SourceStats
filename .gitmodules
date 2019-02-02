@@ -1,0 +1,3 @@
+[submodule "sourcestats_extension/sourcemod"]
+	path = sourcestats_extension/sourcemod
+	url = https://github.com/alliedmodders/sourcemod.git

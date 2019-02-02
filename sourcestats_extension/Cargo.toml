@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Dreae <dreae@dreae.onl>"]
 edition = "2018"
 
+[lib]
+crate-type = ["staticlib"]
+
 [dependencies]
 mio = "0.6.16"
 sourcestats_protocol = { path = "../sourcestats_protocol" }
