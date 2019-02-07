@@ -4,8 +4,8 @@ use rayon::{ThreadPoolBuilder, ThreadPool};
 use sourcestats_database::{Pool, ServerKey, SQLError, Kill, Player};
 use sourcestats_protocol::{Message, DecryptError};
 use chrono::prelude::*;
+use crossbeam::channel::{self as mpmc, Sender, Receiver, TryRecvError};
 
-use std::sync::mpsc::{self, Sender, Receiver, TryRecvError};
 use std::sync::Arc;
 use std::io;
 
@@ -40,7 +40,7 @@ type ProcessingResult = Result<(), ProcessingError>;
 
 impl DbWorkerService {
     pub fn new(threads: usize, pool: Pool) -> DbWorkerService {
-        let (reply_send, reply_recv) = mpsc::channel();
+        let (reply_send, reply_recv) = mpmc::unbounded();
         let (registration, set_readiness) = Registration::new2();
         let thread_pool = ThreadPoolBuilder::new().num_threads(threads).thread_name(|id| {
             format!("DbWorker-{}", id)

@@ -9,6 +9,7 @@ extern crate num_cpus;
 extern crate rayon;
 extern crate dotenv;
 extern crate chrono;
+extern crate crossbeam;
 
 #[macro_use]
 extern crate log;

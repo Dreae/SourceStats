@@ -17,6 +17,7 @@ num_cpus = "1.9.0"
 rayon = "1.0.3"
 dotenv = "0.13.0"
 chrono = "0.4.6"
+crossbeam = "0.7.1"
 
 sourcestats_protocol = { path = "../sourcestats_protocol" }
 sourcestats_database = { path = "../sourcestats_database" }
