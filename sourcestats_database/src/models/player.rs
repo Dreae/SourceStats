@@ -31,4 +31,12 @@ impl Player {
     pub fn get_by_id(id: i64, conn: &PgConnection) -> Result<Player, Error> {
         players::table.filter(players::player_id.eq(id)).get_result(conn)
     }
+
+    pub fn get_or_create_by_steam_id(steam_id: i64, conn: &PgConnection) -> Result<Player, Error> {
+        match Player::get_by_steam_id(steam_id, conn) {
+            Ok(player) => Ok(player),
+            Err(Error::NotFound) => Player::insert(steam_id, conn),
+            Err(e) => return Err(e.into()),
+        }
+    }
 }

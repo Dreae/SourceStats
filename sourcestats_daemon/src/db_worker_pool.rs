@@ -87,18 +87,10 @@ impl DbWorkerService {
         let message = Message::decrypt(&key.key_data, packet.nonce, packet.data)?;
         match message {
             Message::PlayerUpdate(update) => {
-                let player = match Player::get_by_steam_id(update.steam_id, &connection) {
-                    Ok(player) => player,
-                    Err(SQLError::NotFound) => Player::insert(update.steam_id, &connection)?,
-                    Err(e) => return Err(e.into()),
-                };
+                let player = Player::get_or_create_by_steam_id(update.steam_id, &connection)?;
 
                 for kill in update.kills.into_iter() {
-                    let victim = match Player::get_by_steam_id(kill.victim_id, &connection) {
-                        Ok(victim) => victim,
-                        Err(SQLError::NotFound) => Player::insert(kill.victim_id, &connection)?,
-                        Err(e) => return Err(e.into()),
-                    };
+                    let victim = Player::get_or_create_by_steam_id(kill.victim_id, &connection)?;
 
                     let db_kill = Kill {
                         timestamp: Utc.timestamp_millis(kill.timestamp),
